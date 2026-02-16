@@ -1,6 +1,5 @@
 {
-  "github.copilot.inlineSuggest.enable": false,
-  "github.copilot.editor.enableAutoCompletions": false,
+  "github.copilot.enable": {"*": false},
     "workbench.colorCustomizations": {
         "terminal.background": "#1e1e1e",
         "terminal.foreground": "#d4d4d4",
