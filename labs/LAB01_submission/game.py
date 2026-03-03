@@ -83,22 +83,6 @@ class Player(Character):
         for item in self.inventory:
             print(f"    - {item}")
 
-    def use_item(self, item_name: str):
-        if item_name not in self.inventory:
-            print("  You don't have that item.")
-            return False
-        if item_name.lower() in ["bandage", "potion", "healing potion"]:
-            healed = random.randint(10, 14)
-            self.health = min(self.max_health, self.health + healed)
-            self.inventory.remove(item_name)
-            print(f"  You use {item_name} and recover {healed} HP.  HP: {self.health}/{self.max_health}")
-            return True
-        if item_name in ["Ancient Tome", "Silver Locket"]:
-            print(f"  You hold the {item_name} -- it hums faintly.")
-            return True
-        print("  That item can't be used right now.")
-        return False
-
     def heal_ability(self):
         healed = random.randint(8, 14)
         self.health = min(self.max_health, self.health + healed)
@@ -162,7 +146,7 @@ class WanderingSpirit(Enemy):
         attack_total = roll + self.strength
         opener = random.choice([
             "A mournful wail fills the room as the Spirit surges toward you.",
-            "The Spirit dissolves into mist — then reforms inches from your face.",
+            "The Spirit dissolves into mist -- then reforms inches from your face.",
             "Ice-cold hands reach through your chest. The Spirit is feeding.",
         ])
         print(f"\n{opener}")
@@ -175,10 +159,10 @@ class WanderingSpirit(Enemy):
                 print("  It passes through your ribs like smoke, leaving a cold hollow behind.")
             if roll == 20:
                 damage *= 2
-                print("  * The Spirit screams — the sound tears straight through your skull!")
+                print("  * The Spirit screams -- the sound tears straight through your skull!")
             target.take_damage(damage)
         else:
-            print("  The Spirit lunges but you stumble back — it passes harmlessly through the wall.")
+            print("  The Spirit lunges but you stumble back -- it passes harmlessly through the wall.")
 
 class PossessedDoll(Enemy):
     def __init__(self):
@@ -313,6 +297,17 @@ def create_world():
     )
 
     # Two-way connections
+    #
+    #   Map layout (north = up, east = right):
+    #
+    #                    [Study / Library]
+    #                           |  (north/south)
+    #   [Living Room] ------- [Dining Room]
+    #         |               (east/west)
+    #   [Entry Hall] -------- [Kitchen]
+    #                              |  (down/up)
+    #                          [Cellar]
+    #
     entry_hall.add_connection("north",  living_room)
     living_room.add_connection("south", entry_hall)
     entry_hall.add_connection("east",   kitchen)
@@ -324,7 +319,7 @@ def create_world():
     kitchen.add_connection("down",      cellar)
     cellar.add_connection("up",         kitchen)
 
-    # Enemies — Shadow Figure is NOT pre-placed; it is summoned by the cellar ritual
+    # Enemies -- Shadow Figure is NOT pre-placed; it is summoned by the cellar ritual
     living_room.enemies.append(WanderingSpirit())
     dining_room.enemies.append(PossessedDoll())
 
@@ -365,9 +360,9 @@ class Combat:
     def _player_turn(self):
         print(f"\n  YOU: {self.player}   |   ENEMY: {self.enemy}")
         if self.forced:
-            print("  Actions: attack / power / heal")
+            print("  Actions: attack / power / heal / help")
         else:
-            print("  Actions: attack / power / heal / run")
+            print("  Actions: attack / power / heal / run / help")
         action = input("  > ").lower().strip()
 
         if action == "attack":
@@ -398,8 +393,24 @@ class Combat:
                 self._check_player_dead()
                 if self.state != Combat.COMBAT_END:
                     self.state = Combat.ENEMY_TURN
+
+        elif action == "help":
+            # Help does NOT consume a turn — player acts again
+            print("\n  " + "-" * 48)
+            print("  COMBAT ACTIONS:")
+            print("    attack  Roll d20 + STR vs enemy DEF.")
+            print("            Standard hit; critical (d20=20) deals double damage.")
+            print("    power   Roll d20 + STR - 2 vs enemy DEF.")
+            print("            Harder to land, but deals 4-10 + STR on a hit.")
+            print("    heal    Recover 8-14 HP and reduce Fear by the same amount.")
+            print("            Does not attack; enemy will still take their turn.")
+            if not self.forced:
+                print("    run     50% chance to escape. Failure adds +5 Fear.")
+            print("  " + "-" * 48 + "\n")
+            # State unchanged — player gets to choose again immediately
+
         else:
-            print("  Unknown action. Try: attack / power / heal / run")
+            print("  Unknown action. Try: attack / power / heal / run / help")
 
     def _enemy_turn(self):
         self.enemy.attack(self.player)
@@ -453,7 +464,7 @@ class Game:
         self.elapsed          = 0.0
         self.ritual_done      = False
 
-    # ENTRY POINT 
+    # ENTRY POINT
     def start(self):
         self._show_intro()
         self._create_player()
@@ -477,7 +488,7 @@ class Game:
                 self._show_victory()
                 break
 
-    # INTRO / SETUP 
+    # INTRO / SETUP
     def _show_intro(self):
         print("\n" + "=" * 52)
         print("  MIDNIGHT IN BLACKWOOD MANOR")
@@ -509,7 +520,7 @@ class Game:
                 return
             print("  Please type: enter  or  leave")
 
-    # MAIN EXPLORATION LOOP 
+    # MAIN EXPLORATION LOOP
     def _exploration_loop(self):
         print("\n  What do you do?")
         print("  (look | go [dir] | take [item] | inventory | map | help | quit)")
@@ -543,7 +554,7 @@ class Game:
         else:
             print("  Unknown command. Type 'help' for options.")
 
-    # MOVE 
+    # MOVE
     def _move(self, direction: str):
         if direction not in self.current_location.connections:
             print(f"  You can't go {direction} from here.")
@@ -555,9 +566,13 @@ class Game:
         # Full room description every time you enter
         self.current_location.describe()
 
+        # If ritual is done, the house is actively collapsing
+        if self.ritual_done:
+            self._crumble_move_effect()
+
         # Advance timer and display clock
         self._advance_time()
-        if self.state == Game.GAME_OVER:
+        if self.state != Game.EXPLORING:
             return
         self._show_time()
 
@@ -566,17 +581,17 @@ class Game:
             enemy = self.current_location.enemies[0]
             print(f"\n  A {enemy.name} lunges from the shadows -- you have no choice but to fight!")
             self._initiate_combat(forced=True)
-            if self.state in (Game.GAME_OVER, Game.VICTORY):
+            if self.state != Game.EXPLORING:
                 return
         else:
             self._add_fear(3, "The silence presses in.")
 
-        if self.state == Game.GAME_OVER:
+        if self.state != Game.EXPLORING:
             return
 
         self._check_victory()
 
-    # TAKE ITEM 
+    # TAKE ITEM
     def _take_item(self, item_name: str):
         match = next((i for i in self.current_location.items
                       if i.lower() == item_name.lower()), None)
@@ -586,7 +601,7 @@ class Game:
         self.player.pick_up(match)
         self.current_location.items.remove(match)
         self._advance_time()
-        if self.state == Game.GAME_OVER:
+        if self.state != Game.EXPLORING:
             return
         self._show_time()
         self._check_victory()
@@ -624,23 +639,23 @@ class Game:
             return
 
         self._advance_time()
-        if self.state == Game.GAME_OVER:
+        if self.state != Game.EXPLORING:
             return
         self._show_time()
         self._check_victory()
 
-    # VICTORY CHECK / CELLAR RITUAL 
+    # VICTORY CHECK / CELLAR RITUAL
     def _check_victory(self):
         inv        = getattr(self.player, "inventory", [])
         has_tome   = "Ancient Tome"  in inv
         has_locket = "Silver Locket" in inv
 
-        # Cellar: trigger ritual if both relics are held ──
+        # Cellar: trigger ritual if both relics are held
         if (not self.ritual_done
                 and self.current_location.name == "Cellar"):
             if has_tome and has_locket:
                 self._perform_ritual()
-                if self.state in (Game.GAME_OVER, Game.FEAR_DEATH):
+                if self.state != Game.EXPLORING:
                     return
             else:
                 missing = []
@@ -652,9 +667,31 @@ class Game:
 
         # Entry Hall: escape after ritual
         if self.ritual_done and self.current_location.name == "Entry Hall":
-            print("\n  The front door explodes open.")
-            print("  A rush of cold night air fills your lungs.")
-            print("  You sprint out and never look back.\n")
+            print()
+            print("  KRAAK -- the staircase behind you collapses.")
+            print("  The ceiling of the entry hall buckles. A chandelier")
+            print("  crashes to the floor three feet from where you stand.")
+            print()
+            print("  The front door.")
+            print("  You hit it with your shoulder -- it explodes open.")
+            print()
+            print("  Cold night air. Grass under your feet.")
+            print("  You sprint -- you don't stop -- you don't look back.")
+            print()
+            print("  Behind you:")
+            print()
+            print("  BOOM.")
+            print("  BOOM.")
+            print("  BOOM.")
+            print()
+            print("  A rolling crash of stone and timber.")
+            print("  The windows blow out in a wall of dust and glass.")
+            print("  Then -- silence.")
+            print()
+            print("  You turn around.")
+            print("  Blackwood Manor is gone.")
+            print("  Nothing but a cloud of settling dust and a hole in the hill.")
+            print()
             self.state        = Game.VICTORY
             self.game_running = False
 
@@ -693,19 +730,35 @@ class Game:
         result = battle.start()
 
         if result == "victory":
-            # Fear relief and ritual completion
             fear_relief = 10
             self.player.fear = max(0, self.player.fear - fear_relief)
             print(f"\n  [fear] -{fear_relief}  The entity is gone. Your nerves steady.")
             print(f"  Fear: {self.player.fear}/100")
             print()
             print("  " + "=" * 50)
-            print("  The ritual is complete. The curse is broken.")
-            print("  The house groans — walls crack — plaster falls.")
-            print("  You feel the manor releasing its grip.")
-            print()
-            print("  *** GET OUT. NOW. GO TO THE ENTRY HALL. ***")
+            print("  THE RITUAL IS COMPLETE.")
             print("  " + "=" * 50)
+            print()
+            print("  A silence falls -- total, absolute.")
+            print("  Then the floor lurches beneath your feet.")
+            print()
+            print("  CRACK.")
+            print()
+            print("  A fracture splits the ceiling end to end.")
+            print("  Plaster rains down in sheets. The ritual circle")
+            print("  splits apart, stones grinding against each other.")
+            print("  The walls bow inward with a sound like screaming.")
+            print()
+            print("  BOOM. BOOM. BOOM.")
+            print()
+            print("  The whole cellar shudders. A support beam")
+            print("  splinters above you. Dust fills your lungs.")
+            print("  The house is coming down.")
+            print()
+            print("  " + "!" * 50)
+            print("  !!!  GET OUT.  THE MANOR IS COLLAPSING.  !!!")
+            print("  !!!  RETURN TO THE ENTRY HALL TO ESCAPE.  !!!")
+            print("  " + "!" * 50)
             self.ritual_done = True
 
         elif result == "fear_death":
@@ -716,7 +769,7 @@ class Game:
             self.state        = Game.GAME_OVER
             self.game_running = False
 
-    # TIME 
+    # TIME
     def _advance_time(self):
         self.elapsed += self.TIME_PER_ACT
         if self.elapsed >= self.MAX_ELAPSED:
@@ -734,7 +787,7 @@ class Game:
         remaining     = self.MAX_ELAPSED - self.elapsed
         print(f"\n  [clock] {disp_hour}:{minute:02d} {suffix}  --  {remaining:.2f} hr(s) until sunrise")
 
-    # FEAR 
+    # FEAR
     def _add_fear(self, amount: int, reason: str = ""):
         self.player.fear = min(100, self.player.fear + amount)
         msg = f"  [fear] +{amount}"
@@ -750,28 +803,30 @@ class Game:
     # MAP
     def _show_map(self):
         """
-        Fixed-layout ASCII map of Blackwood Manor.
+        ASCII map reflecting actual room connections (north = up, east = right):
 
-        Column layout (0-indexed char positions):
-          Col A =  2  : Study / Library  (top row, above Dining Room)
-          Col A =  2  : Dining Room      (middle row, leftmost)
-          Col B = 22  : Living Room      (middle row)
-          Col C = 42  : Entry Hall       (middle row)
-          Col D = 58  : Kitchen          (middle row, rightmost)
-          Col D = 58  : Cellar           (bottom row, below Kitchen)
+                         [Study / Library]
+                                |  (north/south)
+        [Living Room] ------- [Dining Room]
+               |              (east/west)
+        [Entry Hall] -------- [Kitchen]
+                                   |  (down/up)
+                               [Cellar]
+
+        Left column  : Entry Hall (bottom) and Living Room (top)
+        Right column : Study (top), Dining Room, Kitchen (bottom), Cellar (below)
         """
         cur = self.current_location.name
 
-        # Build a 9-char wide cell for each room:  >[X Name  ]  or  [ Name   ]
         CELL = 20   # fixed cell width including brackets and marker
+        SEP  = "---"
 
         def cell(name: str):
-            loc    = self._find_location(name)
-            here   = ">" if name == cur else " "
-            enemy  = "X" if (loc and loc.enemies) else " "
-            # Truncate display name to fit (max CELL-5 chars)
-            disp   = name[:CELL - 5] if len(name) > CELL - 5 else name
-            inner  = f"{enemy} {disp}"
+            loc   = self._find_location(name)
+            here  = ">" if name == cur else " "
+            enemy = "X" if (loc and loc.enemies) else " "
+            disp  = name[:CELL - 5] if len(name) > CELL - 5 else name
+            inner = f"{enemy} {disp}"
             return f"{here}[{inner:<{CELL-3}}]"
 
         study   = cell("Study / Library")
@@ -781,52 +836,44 @@ class Game:
         kitchen = cell("Kitchen")
         cellar  = cell("Cellar")
 
-        # Fixed column start positions (spaces before each cell)
-        # dining at col 2, living at col 2+CELL+3, entry at col 2+2*(CELL+3), etc.
-        SEP = "---"
-        col_dining  = 2
-        col_living  = col_dining  + CELL + len(SEP)
-        col_entry   = col_living  + CELL + len(SEP)
-        col_kitchen = col_entry   + CELL + len(SEP)
+        # Two-column layout
+        col_left  = 2                           # Living Room / Entry Hall
+        col_right = col_left + CELL + len(SEP)  # Study / Dining / Kitchen / Cellar
 
-        # Vertical bar positions (centre of each cell)
-        bar_dining  = col_dining  + CELL // 2
-        bar_kitchen = col_kitchen + CELL // 2
+        bar_left  = col_left  + CELL // 2       # vertical centre of left column
+        bar_right = col_right + CELL // 2       # vertical centre of right column
 
-        def pad(n):
-            return " " * n
+        def pad(n): return " " * n
 
-        print("\n" + "=" * 76)
+        print("\n" + "=" * 70)
         print("  BLACKWOOD MANOR  --  MAP")
         print("  Legend:  > = you are here     X = enemy present")
-        print("=" * 76)
+        print("=" * 70)
         print()
 
-        # Row 0: Study (centred above Dining Room column)
-        study_indent = col_dining + (CELL - len(study)) // 2
-        print(pad(study_indent) + study)
+        # Row 0: Study (top of right column)
+        print(pad(col_right) + study)
 
-        # Row 1: vertical connector Study <-> Dining Room
-        print(pad(bar_dining) + "|  (north / south)")
+        # Row 1: vertical connector  Study <--> Dining Room
+        print(pad(bar_right) + "|  (north / south)")
 
-        # Row 2: main corridor
-        print(pad(col_dining)  + dining  + SEP
-            + living  + SEP
-            + entry   + SEP
-            + kitchen)
+        # Row 2: Living Room (left) --- Dining Room (right)
+        print(pad(col_left) + living + SEP + dining)
 
-        # Row 3: vertical connector Kitchen <-> Cellar
-        print(pad(bar_kitchen) + "|  (down / up)")
+        # Row 3: vertical connector  Living Room <--> Entry Hall
+        print(pad(bar_left) + "|  (north / south)")
 
-        # Row 4: Cellar (centred under Kitchen column)
-        cellar_indent = col_kitchen + (CELL - len(cellar)) // 2
-        print(pad(cellar_indent) + cellar)
+        # Row 4: Entry Hall (left) --- Kitchen (right)
+        print(pad(col_left) + entry + SEP + kitchen)
+
+        # Row 5: vertical connector  Kitchen <--> Cellar
+        print(pad(bar_right) + "|  (down / up)")
+
+        # Row 6: Cellar (bottom of right column)
+        print(pad(col_right) + cellar)
 
         print()
-        print("  Route to victory:")
-        print("    Entry Hall --north-> Living Room --east-> Dining Room --north-> Study")
-        print("    Entry Hall --east->  Kitchen --down-> Cellar")
-        print("=" * 76 + "\n")
+        print("=" * 70 + "\n")
 
     def _find_location(self, name: str):
         """BFS from current location to find a Location object by name."""
@@ -844,7 +891,7 @@ class Game:
                     queue.append(nb)
         return None
 
-    # HELP 
+    # HELP
     def _show_help(self):
         print("\n" + "-" * 52)
         print("  COMMANDS")
@@ -862,10 +909,11 @@ class Game:
         print("  help         Show this help screen.")
         print("  quit         Exit the game.")
         print()
-        print("  COMBAT ACTIONS:")
+        print("  COMBAT ACTIONS (type  help  inside battle for details):")
         print("    attack   Standard d20 attack.")
         print("    power    High-damage, slightly harder to land.")
-        print("    heal     Recover some HP.")
+        print("    heal     Recover HP and reduce Fear by the same amount.")
+        print("    help     Explain each combat action. Does not use a turn.")
         print()
         print("  GOAL:")
         print("    1. Grab the Ancient Tome  (Living Room)")
@@ -878,7 +926,47 @@ class Game:
         print("  You have 10 hours total (8 PM -> 6 AM).")
         print("-" * 52 + "\n")
 
-    # END SCREENS ──
+    # END SCREENS
+    def _crumble_move_effect(self):
+        """Print a random collapsing-house effect when the player moves post-ritual."""
+        effects = [
+            [
+                "  The floor groans beneath every step.",
+                "  A crack races up the wall beside you.",
+                "  Dust pours from the ceiling like rain.",
+                "  The Entry Hall is your only way out -- move.",
+            ],
+            [
+                "  CRACK -- a beam above you splits down the middle.",
+                "  Chunks of plaster explode off the ceiling.",
+                "  The whole room tilts almost imperceptibly. The house is sinking.",
+                "  Get to the Entry Hall before it takes you with it.",
+            ],
+            [
+                "  A deep BOOM rolls through the walls from somewhere below.",
+                "  The floorboards ripple. A picture frame falls and shatters.",
+                "  The air smells of dust and rot and something burning.",
+                "  You have to reach the Entry Hall. Now.",
+            ],
+            [
+                "  The lights -- already dead -- flicker impossibly, then go dark.",
+                "  A low moan travels through the walls, the sound of the manor itself dying.",
+                "  Glass explodes somewhere down the hallway.",
+                "  The Entry Hall. That's the way out. Keep moving.",
+            ],
+            [
+                "  CRACK. CRACK. CRACK.",
+                "  Three rapid snaps from deep inside the structure.",
+                "  Something very large is about to give way.",
+                "  Find the Entry Hall -- it's the only door left standing.",
+            ],
+        ]
+        chosen = random.choice(effects)
+        print()
+        for line in chosen:
+            print(line)
+        print()
+
     def _show_game_over(self):
         print("\n" + "=" * 52)
         print("  G A M E   O V E R")
@@ -892,7 +980,7 @@ class Game:
         print("=" * 52)
         print("  The horrors of Blackwood Manor were too much")
         print("  to bear. Your heart seized. Your legs gave.")
-        print("  They found you the next morning — eyes open,")
+        print("  They found you the next morning -- eyes open,")
         print("  mouth frozen mid-scream. The curse lives on.")
         print("=" * 52)
 
@@ -900,8 +988,9 @@ class Game:
         print("\n" + "=" * 52)
         print("  V I C T O R Y")
         print("=" * 52)
-        print("  The curse breaks. You escape into the night.")
-        print("  Blackwood Manor stands silent once more.")
+        print("  The curse is broken. The manor is rubble.")
+        print("  You made it out.")
+        print("  Blackwood Manor will never claim another soul.")
         print("=" * 52)
 
 # =============================================================================
