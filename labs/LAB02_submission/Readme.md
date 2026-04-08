@@ -1,8 +1,8 @@
 # Lab 2 Submission README
 
 ## Student Information
-- Name: [Your Name]
-- Date: [YYYY-MM-DD]
+- Name: [Alexander Zermeno]
+- Date: [2026-04-02]
 
 ## Deliverables Included
 - `inference_api/Dockerfile`
@@ -15,32 +15,33 @@
 
 ### Inference API
 ```bash
-[PUT YOUR DOCKER BUILD COMMAND FOR INFERENCE API IMAGE HERE]
+docker build -t congo-inference ./inference_api
 ```
 
 ### Preprocessor
 ```bash
-[PUT YOUR DOCKER BUILD COMMAND FOR PREPROCESSOR IMAGE HERE]
+docker build -t congo-preprocessor ./preprocessor
 ```
 
 ## Docker Run Commands Used
 
 ### Inference API Container
 ```bash
-[PUT YOUR DOCKER RUN COMMAND FOR INFERENCE API CONTAINER HERE]
+docker run -d \
+  -p 8000:8000 \
+  -v $(pwd)/logs:/logs \
+  --name inference-api \
+  congo-inference
 ```
 
 ### Preprocessor Container
 ```bash
-[PUT YOUR DOCKER RUN COMMAND FOR PREPROCESSOR CONTAINER HERE]
+docker run -d \
+  -v $(pwd)/incoming:/incoming \
+  -e API_URL=http://host.docker.internal:8000 \
+  --name preprocessor \
+  congo-preprocessor
 ```
 
 ## Brief Explanation: How the Containers Communicate
-[Write 3-6 sentences here.]
-
-Points to cover:
-- Which container calls which endpoint.
-- How the preprocessor knows where to find the inference API.
-- How images and logs persist using mounted host folders.
-- Why `localhost` can be tricky inside containers.
-
+The preprocessor watches the `incoming/` folder and sends each new image to the inference API's `/predict` endpoint via HTTP POST. To tell the preprocessor where the API lives, we pass in the `API_URL` environment variable at runtime. One thing that was confusing and had me referring back to our lecture, was the inability to use `localhost` when passing `API_URL` as it is inside a container that just points back to the container itself. For data to actually stay, both containers need bind mounts connecting them to folders on the host machine. The `incoming/` mount is how the preprocessor sees new images dropped on your laptop, meanwhile the `logs/` mount is how classification results get saved somewhere permanent. The inference API writes each result to `/logs/classifications.jsonl`, and the `/stats` endpoint just reads from that same file when you need a summary.

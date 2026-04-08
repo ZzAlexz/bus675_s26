@@ -209,16 +209,40 @@ async def predict(
 # ============================================================================
 # TODO: Add /health and /stats endpoints (Part 4)
 # ============================================================================
-# Your code here!
-# 
-# /health should return: {"status": "healthy", "model_loaded": true}
-#
-# /stats should read from the log file and return statistics like:
-# - Total items processed
-# - Breakdown by classification
-# - Average confidence score
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) # The uvicorn server listens on port 8000 and binds to all interfaces
+
+@app.get("/stats")
+def stats():
+    if not LOG_PATH.exists():
+        return {"total_processed": 0, "breakdown": {}, "average_confidence": 0}
+    
+    entries = []
+    with open(LOG_PATH, 'r') as f:
+        for line in f:
+            entries.append(json.loads(line))
+    
+    if not entries:
+        return {"total_processed": 0, "breakdown": {}, "average_confidence": 0}
+    
+    breakdown = {}
+    for entry in entries:
+        label = entry["top_prediction"]
+        breakdown[label] = breakdown.get(label, 0) + 1
+    
+    avg_confidence = round(sum(e["confidence"] for e in entries) / len(entries), 2)
+    
+    return {
+        "total_processed": len(entries),
+        "breakdown": breakdown,
+        "average_confidence": avg_confidence
+    }
